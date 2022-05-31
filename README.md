@@ -9,7 +9,37 @@ Pretty straightforward implementation were we create a scope function that will 
 
 When deferring a func, we will also have another scope called `RecoverableScope` since all deferred functions can gracefully recover from a thrown error. The first function to recover from it will consume it (hence, further calls to recover will yield no value). If no function consumes the thrown error, the thrown error will be broadcasted as a normal one (hence you will have to try-catch it)
 
-Behavior should be exactly as go, regardless of the stuff we can't replicate because of language barriers (eg. deferring an invocation instead of a function), regardless of those stuff it should be the same
+Behavior should be close-to-exact as go. Everything is the same besides two things that are outside of our scope because they are language differences:
+1. We cannot name return parameters, hence we can't alter return values inside a `defer` **directly**.
+```kt
+fun problem(): ReturnValue {
+    deferrable {
+        defer { return ReturnValue() } // Bad. We cannot return inside a defer because language + contract's API limitations in interfaces/classes
+        // do stuff that may throw errors
+        return ReturnValue() // OK. We can return inside a deferrable, this works fine
+    }
+    return ReturnValue() // OK. This is needed because if an error is thrown and we recover, we will reach here.
+}
+
+fun solution(): ReturnValue {
+    var returnValue: ReturnValue? // name the return value at the beginning.. "similar" to go named return values
+    deferrable {
+        defer { recover()?.let { err -> returnValue = ErrorValue(err) } }
+        // do stuff that may throw errors
+        return returnValue
+    }
+    return returnValue
+}
+```
+2. We cannot pass invocations as defers instead of high order functions
+```kt
+fun problem() = deferrable {
+    defer aFunction(param) // Bad. We can't pass an invocation
+    defer { aFunction(param) } // OK.
+}
+```
+
+Besides this two minimal limitations (which don't even pose a problem), everything is mirrored as-is:
 - internal panics cant be recovered, thus are signaled
 - multiple recovers behave in a first come first serve fashion
 - cannot recover from a panic after a recover
@@ -56,7 +86,11 @@ class GoRecoverableScope(private var err: Throwable?) : RecoverableScope {
 }
 
 @Throws(Throwable::class)
-inline fun deferrable(crossinline block: Deferrable) {
+@ExperimentalContracts
+inline fun deferrable(block: Deferrable) {
+  contract {
+    callsInPlace(block, InvocationKind.AT_MOST_ONCE) 
+  }
   val scope = GoDeferrableScope()
   var err: Throwable? = null
   try {
@@ -86,18 +120,21 @@ fun main() = deferrable {
   // do stuff
   throw Error("oops!")
 }
-
-// example of previous method. Imagine a REST API controller for a GET endpoint 
-fun restGet(request: Request): Any {
+```
+Another example might be
+```kt
+// Imagine a REST API controller for a GET endpoint 
+fun restGet(request: Request): Response {
   var response: Any? = null
   deferrable {
     defer { recover()?.let { err -> response = handleError(request, err) } }
 
     // do stuff
-    throw Error("oops!")
+      
+    return response ?: throw Error("oops!")
   }
 
-  return response
+  return response // in case an error is thrown, we recover and return here.
 }
 ```
 

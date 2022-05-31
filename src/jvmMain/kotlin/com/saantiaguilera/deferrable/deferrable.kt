@@ -1,5 +1,9 @@
 package com.saantiaguilera.deferrable
 
+import kotlin.contracts.ExperimentalContracts
+import kotlin.contracts.InvocationKind
+import kotlin.contracts.contract
+
 typealias Deferrable = context(DeferrableScope) () -> Unit
 typealias Recoverable = context(RecoverableScope) () -> Unit
 
@@ -36,7 +40,11 @@ class GoRecoverableScope(private var err: Throwable?) : RecoverableScope {
 }
 
 @Throws(Throwable::class)
-inline fun deferrable(crossinline block: Deferrable) {
+@ExperimentalContracts
+inline fun deferrable(block: Deferrable) {
+    contract {
+        callsInPlace(block, InvocationKind.AT_MOST_ONCE)
+    }
     val scope = GoDeferrableScope()
     var err: Throwable? = null
     try {

@@ -3,8 +3,10 @@ package com.saantiaguilera.deferrable
 import java.io.File
 import java.io.InputStream
 import java.util.concurrent.Semaphore
+import kotlin.contracts.ExperimentalContracts
 
 // try-catch example
+@ExperimentalContracts
 fun tryCatchExample() = deferrable {
     defer { recover()?.let { err -> println(err) /* do something with error? */  } }
     throw Error("oops!") // do stuff
@@ -21,6 +23,7 @@ fun customRecover() {
         println(err)
     }
 }
+@ExperimentalContracts
 fun tryCatchComplexExample() = deferrable {
     defer { customRecover() }
     throw Error("oops!") // do stuff
@@ -52,21 +55,29 @@ interface DoerRepository {
 }
 
 // example fun were we do stuff
-fun doStuff(doer: DoerRepository) = deferrable {
-    defer { recover()?.let { err -> println(err) /* do something with error? */  } }
+@ExperimentalContracts
+fun doStuff(doer: DoerRepository): (String) {
+    deferrable {
+        defer { recover()?.let { err -> println(err) /* do something with error? */ } }
 
-    trace {
-        val file = doer.getStuff()
-        val fis = file.open()
+        trace {
+            val file = doer.getStuff()
+            val fis = file.open()
 
-        if (fis != null) {
-            // do stuff.
-            throw Error("example!")
+            if (fis != null) {
+                // do stuff.
+                throw Error("example!")
+            }
         }
+
+        return "inner return works fine"
     }
+
+    return "outer return because if an error is thrown we have to return something"
 }
 
 // example fun of concurrent stuff that need to be released/mark as done
+@ExperimentalContracts
 fun semaphore(s: Semaphore) = deferrable {
     s.acquire()
     defer { s.release() }
