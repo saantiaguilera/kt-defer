@@ -25,8 +25,7 @@ fun solution(): ReturnValue {
     var returnValue: ReturnValue? // name the return value at the beginning.. "similar" to go named return values
     deferrable {
         defer { recover()?.let { err -> returnValue = ErrorValue(err) } }
-        // do stuff that may throw errors
-        return returnValue
+        // do stuff that may throw errors OR assign returnValue
     }
     return returnValue
 }
@@ -128,10 +127,7 @@ fun restGet(request: Request): Response {
   var response: Any? = null
   deferrable {
     defer { recover()?.let { err -> response = handleError(request, err) } }
-
     // do stuff
-      
-    return response ?: throw Error("oops!")
   }
 
   return response // in case an error is thrown, we recover and return here.
